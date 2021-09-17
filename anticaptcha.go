@@ -3,6 +3,7 @@ package anticaptcha
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -78,8 +79,8 @@ func (c *Client) GetQueueStats(queueId int) (*QueueStatsResponse, error) {
 	return responseData, nil
 }
 
-// ImageToTextTask
-func (c *Client) SendImageToTextTask(task *ImageToTextTask) (*ImageToTextTaskResponse, error) {
+// SendImageToTextTask отправляет изображение
+func (c *Client) SendImageToTextTask(task *ImageToTextTask) (resp *ImageToTextTaskResponse, err error) {
 	task.Reset()
 	reqBody := struct {
 		Client
@@ -88,17 +89,25 @@ func (c *Client) SendImageToTextTask(task *ImageToTextTask) (*ImageToTextTaskRes
 		Client: *c,
 		Task:   task,
 	}
-	if err := c.send(task, reqBody); err != nil {
-		return nil, err
+	if err = c.send(task, reqBody); err != nil {
+		return
 	}
+
+	if task.TaskId == 0 {
+		err = errors.New("Task not create. ")
+		return
+	}
+
 	reqTaskBody := c.createTaskBody(task)
 	for task.Response.Status == "processing" || task.Response.Status == "" {
 		time.Sleep(task.GetTimeout())
-		if err := c.request(&reqTaskBody, "/getTaskResult", &task.Response); err != nil {
-			return nil, err
+		if err = c.request(&reqTaskBody, "/getTaskResult", &task.Response); err != nil {
+			return
 		}
 	}
-	return task.Response, nil
+
+	resp = task.Response
+	return
 }
 
 // FunCaptchaTask
